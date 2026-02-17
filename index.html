@@ -82,12 +82,13 @@
     </style>
     <!-- Chosen Palette: Slate (Neutrals) + Indigo (Primary) + Emerald (Success/Profit) -->
     <!-- Application Structure Plan:
-         1. Header: Navigation updated to include "Modelo Matemático".
-         2. Tab Navigation: Controls visibility of Sales Calc, Ops Sim, and Documentation.
+         1. Header: Navigation updated to include "Modelo Matemático" and "Punto de Equilibrio".
+         2. Tab Navigation: Controls visibility of Sales Calc, Ops Sim, Documentation, and Break Even.
          3. Fixed Parameters Section: Visualizes base costs ($F).
          4. Sales Calculator (Model A).
          5. Portfolio Simulator (Model B).
-         6. Documentation View: Renders formulas from technical doc.
+         6. Break Even Analysis (New): Visualization of sq mts scaling vs costs.
+         7. Documentation View: Renders formulas from technical doc.
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. Formulas rendered with HTML/CSS. -->
 </head>
@@ -98,7 +99,7 @@
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
         <div>
             <h1 class="text-3xl font-bold tracking-tight">PortalView: Estructura de Costos </h1>
-            <p class="text-slate-400 mt-1">Versión 1.1 Operaciones y Ventas</p>
+            <p class="text-slate-400 mt-1">Versión 1.2 Operaciones y Ventas</p>
         </div>
         <div class="mt-4 md:mt-0 bg-slate-800 rounded-lg p-1 px-2 inline-flex flex-wrap gap-y-2">
             <button onclick="switchTab('sales')" id="btn-sales" class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white">
@@ -106,6 +107,9 @@
             </button>
             <button onclick="switchTab('ops')" id="btn-ops" class="px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2">
                 Simulador Portafolio (Ops)
+            </button>
+            <button onclick="switchTab('breakeven')" id="btn-breakeven" class="px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2">
+                Punto de Equilibrio
             </button>
             <button onclick="switchTab('docs')" id="btn-docs" class="px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2">
                 Modelo Matemático
@@ -332,7 +336,57 @@
         </div>
     </div>
 
-    <!-- VIEW 3: DOCUMENTATION (NEW) -->
+    <!-- VIEW 4: BREAK EVEN (NEW) -->
+    <div id="view-breakeven" class="hidden space-y-6">
+        <div class="border-l-4 border-amber-500 bg-white p-6 rounded-r-xl shadow-sm">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Punto de Equilibrio (Basado en Área)</h2>
+            <p class="text-slate-600 mb-4">
+                Análisis de rentabilidad considerando ingresos recurrentes mensuales vs. costos operativos totales escalados por área ($m^2$).
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-6">
+                <!-- Config Form -->
+                <div class="lg:col-span-1 bg-amber-50 p-5 rounded-lg border border-amber-100 h-fit space-y-4">
+                    <h3 class="font-bold text-amber-800 border-b border-amber-200 pb-2">Configuración de Precios</h3>
+
+                    <div>
+                        <label class="block text-xs font-bold text-amber-700 mb-1 uppercase">Precio Mensual por 10k m²</label>
+                        <input type="number" id="be-price" value="2000" class="w-full p-2 text-sm border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 transition" oninput="updateBreakEven()">
+                        <p class="text-[10px] text-amber-600 mt-1">Ingreso recurrente por bloque.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-amber-700 mb-1 uppercase">Objetos Incluidos</label>
+                        <input type="number" id="be-objects" value="1000" class="w-full p-2 text-sm border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 transition" oninput="updateBreakEven()">
+                        <p class="text-[10px] text-amber-600 mt-1">Costo único amortizado en 12 meses.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-amber-700 mb-1 uppercase">Tamaño Promedio Proyecto</label>
+                        <input type="number" id="be-avg-size" value="10000" class="w-full p-2 text-sm border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 transition" oninput="updateBreakEven()">
+                        <p class="text-[10px] text-amber-600 mt-1">Para estimar densidad de visitas.</p>
+                    </div>
+
+                    <div class="pt-2 border-t border-amber-200">
+                        <div class="flex justify-between text-sm text-amber-900 font-bold">
+                            <span>Punto Equilibrio Aprox:</span>
+                            <span id="be-result-text">-- m²</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="lg:col-span-2 bg-white p-4 rounded-lg border border-slate-200 flex flex-col">
+                    <h4 class="text-sm font-bold text-slate-700 mb-2 text-center">Ingresos vs Costos (Anualizado)</h4>
+                    <div class="chart-container">
+                        <canvas id="breakEvenChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 5: DOCUMENTATION (Moved to 5) -->
     <div id="view-docs" class="hidden space-y-6">
         <div class="border-l-4 border-slate-500 bg-white p-6 rounded-r-xl shadow-sm">
             <div class="flex justify-between items-start mb-6">
@@ -447,7 +501,7 @@
         <div class="bg-white inline-block px-6 py-3 rounded-full shadow-sm border border-slate-100 mb-4">
             <span class="font-bold text-slate-700">Nota Operativa:</span> Las visitas se programan semanalmente (Viernes PM) para minimizar interferencia. Costo promedio mensual calculado sobre 52 semanas.
         </div>
-        <p>&copy; 2026 PortalView v1.1</p>
+        <p>&copy; 2026 PortalView v1.2</p>
     </footer>
 
 </main>
@@ -490,6 +544,7 @@
     let fixedCostChart = null;
     let quoteBreakdownChart = null;
     let arbitrageChart = null;
+    let breakEvenChart = null;
 
     // --- Initialization ---
     document.addEventListener('DOMContentLoaded', () => {
@@ -497,6 +552,7 @@
         updateGlobalParams(); // Initial calc
         calculateQuote(); // Initial quote
         renderPortfolio(); // Initial portfolio
+        updateBreakEven(); // Initial Break Even
     });
 
     // --- Navigation Logic ---
@@ -507,29 +563,37 @@
         document.getElementById('view-sales').classList.toggle('hidden', view !== 'sales');
         document.getElementById('view-ops').classList.toggle('hidden', view !== 'ops');
         document.getElementById('view-docs').classList.toggle('hidden', view !== 'docs');
+        document.getElementById('view-breakeven').classList.toggle('hidden', view !== 'breakeven');
 
         // Update Buttons
         const btnSales = document.getElementById('btn-sales');
         const btnOps = document.getElementById('btn-ops');
         const btnDocs = document.getElementById('btn-docs');
+        const btnBE = document.getElementById('btn-breakeven');
 
         // Reset classes
         const activeClass = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white shadow-sm";
+        const activeOps = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-emerald-600 text-white shadow-sm ml-2";
+        const activeDocs = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-slate-600 text-white shadow-sm ml-2";
+        const activeBE = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-amber-600 text-white shadow-sm ml-2";
+
         const inactiveClass = "px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2";
         const inactiveClassNoMargin = "px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors";
 
+        // Reset All
+        btnSales.className = inactiveClassNoMargin;
+        btnOps.className = inactiveClass;
+        btnDocs.className = inactiveClass;
+        btnBE.className = inactiveClass;
+
         if(view === 'sales') {
             btnSales.className = activeClass;
-            btnOps.className = inactiveClass;
-            btnDocs.className = inactiveClass;
         } else if (view === 'ops') {
-            btnOps.className = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-emerald-600 text-white shadow-sm ml-2";
-            btnSales.className = inactiveClassNoMargin;
-            btnDocs.className = inactiveClass;
+            btnOps.className = activeOps;
+        } else if (view === 'breakeven') {
+            btnBE.className = activeBE;
         } else {
-            btnDocs.className = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-slate-600 text-white shadow-sm ml-2";
-            btnSales.className = inactiveClassNoMargin;
-            btnOps.className = inactiveClass;
+            btnDocs.className = activeDocs;
         }
     }
 
@@ -556,6 +620,77 @@
         // Re-calc dependent views
         calculateQuote();
         updatePortfolioStats();
+        updateBreakEven();
+    }
+
+    // --- Core Logic: Break Even Analysis ---
+    function updateBreakEven() {
+        const pricePer10k = parseFloat(document.getElementById('be-price').value) || 2000;
+        const includedObjects = parseFloat(document.getElementById('be-objects').value) || 1000;
+        const avgProjSize = parseFloat(document.getElementById('be-avg-size').value) || 10000;
+
+        const maxArea = 100000; // 100k sqm limit
+        const steps = 20;
+        const stepSize = maxArea / steps;
+
+        const labels = [];
+        const revenueData = [];
+        const costData = [];
+        const fixedData = [];
+
+        const totalFixedAnnual = state.params.salary + state.params.msProject + state.params.hardware + state.params.autodesk;
+
+        let breakEvenArea = null;
+
+        for(let i=0; i<=steps; i++) {
+            const area = i * stepSize;
+            labels.push(area/1000 + 'k');
+
+            // 1. Annual Revenue (Assuming Price is Monthly)
+            // (Area / 10k) * Price * 12 months
+            const revenue = (area / 10000) * pricePer10k * 12;
+            revenueData.push(revenue);
+
+            // 2. Annual Variable Costs
+            // Licenses: ceil(Area/10k) * $6200
+            const costLicenses = Math.ceil(area / 10000) * state.params.cupixBlock;
+
+            // Visits: Assume number of "projects" = Area / AvgSize
+            const numProjects = area > 0 ? (area / avgProjSize) : 0;
+            const costVisits = numProjects * (state.params.visitWeeklyAvg * 12 * 1.0); // Loc 1.0 assumption
+
+            // Objects: Assume included objects are refreshed annually or amortized
+            // Cost = NumProjects * IncludedObjects * $0.50
+            const costObjects = numProjects * includedObjects * state.params.objectFee;
+
+            const totalCost = totalFixedAnnual + costLicenses + costVisits + costObjects;
+            costData.push(totalCost);
+            fixedData.push(totalFixedAnnual);
+
+            // Find intersection
+            if (breakEvenArea === null && revenue >= totalCost && area > 0) {
+                breakEvenArea = area;
+            }
+        }
+
+        // Update UI Text
+        const resultText = document.getElementById('be-result-text');
+        if (breakEvenArea) {
+            resultText.innerText = `~${breakEvenArea.toLocaleString()} m²`;
+            resultText.className = "text-emerald-600 font-bold";
+        } else {
+            resultText.innerText = "> 100k m²";
+            resultText.className = "text-red-600 font-bold";
+        }
+
+        // Update Chart
+        if (breakEvenChart) {
+            breakEvenChart.data.labels = labels;
+            breakEvenChart.data.datasets[0].data = costData; // Total Cost
+            breakEvenChart.data.datasets[1].data = revenueData; // Revenue
+            breakEvenChart.data.datasets[2].data = fixedData; // Fixed Baseline
+            breakEvenChart.update();
+        }
     }
 
     // --- Core Logic: Model A (Quote Calculator) ---
@@ -794,6 +929,69 @@
                 },
                 scales: {
                     y: { beginAtZero: true }
+                }
+            }
+        });
+
+        // Chart 4: Break Even Analysis (NEW)
+        const ctx4 = document.getElementById('breakEvenChart').getContext('2d');
+        breakEvenChart = new Chart(ctx4, {
+            type: 'line',
+            data: {
+                labels: [], // Generated dynamically
+                datasets: [
+                    {
+                        label: 'Costo Total Anual',
+                        data: [],
+                        borderColor: '#ef4444', // Red
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        stepped: true // Step function for licenses logic visually
+                    },
+                    {
+                        label: 'Ingresos Estimados',
+                        data: [],
+                        borderColor: '#10b981', // Emerald
+                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                        borderWidth: 2,
+                        tension: 0
+                    },
+                    {
+                        label: 'Costo Fijo Base',
+                        data: [],
+                        borderColor: '#94a3b8', // Slate
+                        borderDash: [5, 5],
+                        borderWidth: 1,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + formatCurrency(context.raw);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { callback: (val) => '$' + val/1000 + 'k' }
+                    },
+                    x: {
+                        title: { display: true, text: 'Área del Portafolio (m²)' }
+                    }
                 }
             }
         });
