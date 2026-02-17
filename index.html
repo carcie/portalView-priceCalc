@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marco de Precios y Costos - Herramienta Interactiva</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Lenis (Smooth Scrolling) -->
+    <script src="https://unpkg.com/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6; /* Warm neutral light gray */
+            color: #1f2937;
+        }
+
+        /* Lenis Recommended CSS */
+        html.lenis {
+            height: auto;
+        }
+        .lenis.lenis-smooth {
+            scroll-behavior: auto;
+        }
+        .lenis.lenis-smooth [data-lenis-prevent] {
+            overscroll-behavior: contain;
+        }
+        .lenis.lenis-stopped {
+            overflow: hidden;
+        }
+        .lenis.lenis-scrolling iframe {
+            pointer-events: none;
+        }
+
+        /* Chart Containers */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        /* Math Formulas styling */
+        .formula-box {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f8fafc;
+            border-left: 4px solid #6366f1;
+            padding: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        /* Custom Scrollbar for project list */
+        .project-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .project-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .project-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .project-list::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+    <!-- Chosen Palette: Slate (Neutrals) + Indigo (Primary) + Emerald (Success/Profit) -->
+    <!-- Application Structure Plan:
+         1. Header: Navigation updated to include "Modelo Matemático".
+         2. Tab Navigation: Controls visibility of Sales Calc, Ops Sim, and Documentation.
+         3. Fixed Parameters Section: Visualizes base costs ($F).
+         4. Sales Calculator (Model A).
+         5. Portfolio Simulator (Model B).
+         6. Documentation View: Renders formulas from technical doc.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. Formulas rendered with HTML/CSS. -->
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col">
+
+<!-- Header -->
+<header class="bg-slate-900 text-white p-6 shadow-lg relative z-10">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold tracking-tight">PortalView: Estructura de Costos </h1>
+            <p class="text-slate-400 mt-1">Versión 1.1 Operaciones y Ventas</p>
+        </div>
+        <div class="mt-4 md:mt-0 bg-slate-800 rounded-lg p-1 px-2 inline-flex flex-wrap gap-y-2">
+            <button onclick="switchTab('sales')" id="btn-sales" class="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white">
+                Cotizador (Ventas)
+            </button>
+            <button onclick="switchTab('ops')" id="btn-ops" class="px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2">
+                Simulador Portafolio (Ops)
+            </button>
+            <button onclick="switchTab('docs')" id="btn-docs" class="px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2">
+                Modelo Matemático
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Main Content -->
+<main class="flex-grow max-w-7xl mx-auto w-full p-4 md:p-6 space-y-8">
+
+    <!-- Intro / Context Section -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-semibold text-slate-800 mb-2">Contexto Financiero y Operativo</h2>
+        <p class="text-slate-600 mb-6">
+            Marco matemático para la gestión de costos de proyectos.
+            Visualiza la composición de los costos fijos anuales ($F_{base}$) que deben ser cubiertos por el margen del portafolio.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <!-- Parameters List -->
+            <div class="space-y-4">
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <h3 class="font-medium text-slate-700 mb-2 border-b border-slate-200 pb-2">Constantes Anuales Fijas ($F)</h3>
+                    <ul class="space-y-2 text-sm text-slate-600">
+                        <li class="flex justify-between"><span>Salario ($S):</span> <span class="font-mono font-bold">$42,000</span></li>
+                        <li class="flex justify-between"><span>MS Project ($M):</span> <span class="font-mono font-bold">$360</span></li>
+                        <li class="flex justify-between"><span>Hardware ($E):</span> <span class="font-mono font-bold">$1,000</span></li>
+                        <li class="flex justify-between"><span>Autodesk ($A):</span>
+                            <select id="autodesk-tier" class="bg-white border border-slate-300 rounded px-2 py-1 text-xs" onchange="updateGlobalParams()">
+                                <option value="925">$925 (Básico)</option>
+                                <option value="3675" selected>$3,675 (AEC)</option>
+                            </select>
+                        </li>
+                        <li class="flex justify-between pt-2 border-t border-slate-200 text-slate-800 font-bold">
+                            <span>Total Fijo ($F_{base}):</span> <span id="total-fixed-display">$47,035</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                    <h3 class="font-medium text-indigo-800 mb-2">Parámetros Operativos</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm text-indigo-700">
+                        <div>
+                            <span class="block text-xs text-indigo-500">Bloque Cupix</span>
+                            <span class="font-bold">$6,200 / 10k m²</span>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-indigo-500">Rastreo Objetos</span>
+                            <span class="font-bold">$0.50 / obj</span>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-indigo-500">Visita Base</span>
+                            <span class="font-bold">$217 / mes</span>
+                            <span class="text-[10px] block opacity-75">(Promedio Semanal)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart: Fixed Cost Composition -->
+            <div class="flex flex-col items-center">
+                <h3 class="text-sm font-medium text-slate-500 mb-2 text-center">Composición de Costos Fijos Anuales</h3>
+                <div class="chart-container">
+                    <canvas id="fixedCostChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- VIEW 1: SALES CALCULATOR (MODEL A) -->
+    <div id="view-sales" class="space-y-6">
+        <div class="border-l-4 border-indigo-500 bg-white p-6 rounded-r-xl shadow-sm">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Calculadora de Cotización (Modelo A)</h2>
+            <p class="text-slate-600 mb-4">
+                Utilice este módulo para generar el <strong>Precio Piso ($P_{floor}$)</strong> para un cliente individual.
+                Este modelo asume una licencia segregada para proteger los márgenes.
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Input Form -->
+                <div class="lg:col-span-1 space-y-5 bg-slate-50 p-5 rounded-lg border border-slate-200 h-fit">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Área del Proyecto ($m^2$)</label>
+                        <input type="number" id="calc-area" value="6500" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none transition" oninput="calculateQuote()">
+                        <p class="text-xs text-slate-500 mt-1">Impacta bloques de licencia (Pasos de 10k).</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Objetos a Rastrear ($o_i$)</label>
+                        <input type="number" id="calc-objects" value="500" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none transition" oninput="calculateQuote()">
+                        <p class="text-xs text-slate-500 mt-1">Costo único de configuración.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Duración (Meses)</label>
+                        <input type="range" id="calc-duration" min="6" max="24" value="12" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" oninput="calculateQuote()">
+                        <div class="flex justify-between text-xs text-slate-500 mt-1">
+                            <span>6 meses</span>
+                            <span id="duration-display" class="font-bold text-indigo-600">12 meses</span>
+                            <span>24 meses</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Factor de Ubicación ($\lambda$)</label>
+                        <select id="calc-location" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none transition" onchange="calculateQuote()">
+                            <option value="1.0">1.0 - Urbano / Estándar</option>
+                            <option value="1.5">1.5 - Suburbano / Difícil</option>
+                            <option value="2.0">2.0 - Remoto / Minería</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Proyectos Concurrentes Meta ($N_{target}$)</label>
+                        <input type="number" id="calc-targets" value="3" min="1" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none transition" oninput="calculateQuote()">
+                        <p class="text-xs text-slate-500 mt-1">Para asignación de costos fijos.</p>
+                    </div>
+                </div>
+
+                <!-- Results & Visualization -->
+                <div class="lg:col-span-2 flex flex-col justify-between">
+                    <!-- Big Number Result -->
+                    <div class="bg-indigo-600 text-white p-6 rounded-lg shadow-md mb-6 flex flex-col md:flex-row justify-between items-center">
+                        <div>
+                            <h3 class="text-indigo-100 text-sm font-medium uppercase tracking-wider">Precio Piso Total (Cotización)</h3>
+                            <div class="text-4xl font-bold mt-1" id="quote-total">$0</div>
+                        </div>
+                        <div class="mt-4 md:mt-0 text-right">
+                            <p class="text-indigo-200 text-sm">Costo Mensual Promedio</p>
+                            <div class="text-2xl font-semibold" id="quote-monthly">$0</div>
+                        </div>
+                    </div>
+
+                    <!-- Breakdown Chart -->
+                    <div class="bg-white p-4 rounded-lg border border-slate-200 flex-grow">
+                        <h4 class="text-sm font-bold text-slate-700 mb-4 text-center">Desglose de Componentes del Precio ($)</h4>
+                        <div class="chart-container">
+                            <canvas id="quoteBreakdownChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: PORTFOLIO SIMULATOR (MODEL B) -->
+    <div id="view-ops" class="hidden space-y-6">
+        <div class="border-l-4 border-emerald-500 bg-white p-6 rounded-r-xl shadow-sm">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Simulador de Portafolio (Modelo B)</h2>
+            <p class="text-slate-600 mb-4">
+                Herramienta para Operaciones. Analice cómo la agregación de múltiples proyectos bajo una sola licencia genera eficiencia ("Arbitraje").
+                Agregue proyectos para ver el impacto en el margen del portafolio.
+            </p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Project List Manager -->
+                <div class="lg:col-span-4 bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col h-[500px]">
+                    <h3 class="font-bold text-slate-700 mb-3 flex justify-between items-center">
+                        Proyectos Activos
+                        <span class="text-xs bg-slate-200 px-2 py-1 rounded-full" id="project-count">0</span>
+                    </h3>
+
+                    <!-- Add Project Form (Mini) -->
+                    <div class="bg-white p-3 rounded border border-slate-200 shadow-sm mb-4 space-y-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" id="sim-name" placeholder="Nombre (Ej. Proyecto A)" class="text-xs p-2 border rounded w-full">
+                            <input type="number" id="sim-area" placeholder="Area (m²)" class="text-xs p-2 border rounded w-full">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <select id="sim-loc" class="text-xs p-2 border rounded w-full">
+                                <option value="1.0">Loc: 1.0</option>
+                                <option value="1.5">Loc: 1.5</option>
+                                <option value="2.0">Loc: 2.0</option>
+                            </select>
+                            <button onclick="addProject()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded transition">
+                                + Agregar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- List -->
+                    <div id="portfolio-list" class="project-list flex-grow overflow-y-auto space-y-2 pr-2">
+                        <!-- Items injected by JS -->
+                        <p class="text-center text-slate-400 text-sm mt-10 italic">No hay proyectos. Agregue uno arriba.</p>
+                    </div>
+                </div>
+
+                <!-- Analysis Dashboard -->
+                <div class="lg:col-span-8 flex flex-col space-y-6">
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                            <p class="text-xs text-slate-500 uppercase font-bold">Total Facturado (Mod. A)</p>
+                            <p class="text-xl font-bold text-indigo-600 mt-1" id="kpi-revenue">$0</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+                            <p class="text-xs text-slate-500 uppercase font-bold">Costo Real (Mod. B)</p>
+                            <p class="text-xl font-bold text-slate-700 mt-1" id="kpi-cost">$0</p>
+                        </div>
+                        <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200 shadow-sm relative overflow-hidden">
+                            <div class="absolute right-0 top-0 p-4 opacity-10">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <p class="text-xs text-emerald-700 uppercase font-bold">Ganancia por Arbitraje</p>
+                            <p class="text-2xl font-bold text-emerald-600 mt-1" id="kpi-arbitrage">$0</p>
+                        </div>
+                    </div>
+
+                    <!-- Comparison Chart -->
+                    <div class="bg-white p-4 rounded-lg border border-slate-200 flex-grow">
+                        <h4 class="text-sm font-bold text-slate-700 mb-4 text-center">Análisis de Eficiencia: Ventas vs Operaciones</h4>
+                        <div class="chart-container">
+                            <canvas id="arbitrageChart"></canvas>
+                        </div>
+                        <div class="mt-4 text-xs text-slate-500 text-center bg-slate-50 p-2 rounded">
+                            <span class="font-bold">Nota:</span> El Modelo B ahorra costos al agrupar áreas ($\sum a_i$) en bloques de 10k m², mientras que el Modelo A cobra cada proyecto individualmente.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 3: DOCUMENTATION (NEW) -->
+    <div id="view-docs" class="hidden space-y-6">
+        <div class="border-l-4 border-slate-500 bg-white p-6 rounded-r-xl shadow-sm">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Formalización del Modelo Matemático</h2>
+                    <p class="text-slate-600 text-sm mt-1">Definiciones técnicas y base algebraica del sistema de precios.</p>
+                </div>
+                <div class="bg-slate-100 px-3 py-1 rounded text-xs text-slate-500 font-mono">v1.1</div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Model A Section -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-bold text-indigo-700 border-b border-indigo-100 pb-2">Modelo A: Estándar de Ventas</h3>
+                    <p class="text-sm text-slate-600 italic">
+                        Principio: Cada proyecto se cotiza con capacidad independiente para proteger márgenes y evitar desbordamiento.
+                    </p>
+
+                    <div class="formula-box text-sm text-slate-800 shadow-inner">
+                        <div class="mb-2 font-bold text-indigo-600">Fórmula de Precio Piso (P<sub>floor,i</sub>)</div>
+                        P<sub>floor,i</sub> = V<sub>i</sub> + O<sub>i</sub> + L<sub>i</sub> + F<sub>alloc,i</sub>
+                        <br><br>
+                        Donde:
+                        <br>
+                        &bull; V<sub>i</sub> = 217 &middot; &lambda;<sub>i</sub> &middot; d<sub>i</sub> <span class="text-slate-400">(Visitas)</span>
+                        <br>
+                        &bull; O<sub>i</sub> = 0.50 &middot; o<sub>i</sub> <span class="text-slate-400">(Objetos)</span>
+                        <br>
+                        &bull; L<sub>i</sub> = 6,200 &middot; &lceil; a<sub>i</sub> / 10,000 &rceil; <span class="text-slate-400">(Licencia)</span>
+                        <br>
+                        &bull; F<sub>alloc,i</sub> = (d<sub>i</sub> / 12) &middot; (F<sub>base</sub> / N<sub>target</sub>)
+                    </div>
+
+                    <div class="bg-indigo-50 p-3 rounded text-xs text-indigo-800">
+                        <strong>Nota Estratégica:</strong> El uso de la función techo (&lceil;...&rceil;) a nivel de proyecto individual asegura que el cliente pague por el bloque completo de 10k m² que activa.
+                    </div>
+                </div>
+
+                <!-- Model B Section -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-bold text-emerald-700 border-b border-emerald-100 pb-2">Modelo B: Estándar Operativo</h3>
+                    <p class="text-sm text-slate-600 italic">
+                        Principio: Los costos reales se basan en la demanda agregada del portafolio, aprovechando economías de escala.
+                    </p>
+
+                    <div class="formula-box text-sm text-slate-800 shadow-inner" style="border-left-color: #10b981;">
+                        <div class="mb-2 font-bold text-emerald-600">Fórmula de Costo Real (C<sub>actual</sub>)</div>
+                        C<sub>actual</sub> = F<sub>base</sub> + L<sub>agg</sub> + &sum;(V<sub>i</sub> + O<sub>i</sub>)
+                        <br><br>
+                        Donde:
+                        <br>
+                        &bull; F<sub>base</sub> = 43,360 + A <span class="text-slate-400">(Fijos)</span>
+                        <br>
+                        &bull; L<sub>agg</sub> = 6,200 &middot; &lceil; (&sum;a<sub>i</sub>) / 10,000 &rceil;
+                        <br>
+                        &bull; &sum;V<sub>i</sub> = Suma de costos variables de visitas
+                    </div>
+
+                    <div class="bg-emerald-50 p-3 rounded text-xs text-emerald-800">
+                        <strong>Ganancia por Arbitraje:</strong> La diferencia entre cobrar L<sub>i</sub> (segregado) y pagar L<sub>agg</sub> (agregado) genera un excedente operativo.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parameters Table -->
+            <div class="mt-8">
+                <h3 class="font-bold text-slate-700 mb-3">Definición de Variables</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left text-slate-600">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                        <tr>
+                            <th class="px-4 py-2">Símbolo</th>
+                            <th class="px-4 py-2">Definición</th>
+                            <th class="px-4 py-2">Valor Base</th>
+                        </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 border border-slate-200">
+                        <tr>
+                            <td class="px-4 py-2 font-mono font-bold">d<sub>i</sub></td>
+                            <td class="px-4 py-2">Duración del proyecto en meses</td>
+                            <td class="px-4 py-2">Variable (6-24)</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2 font-mono font-bold">&lambda;<sub>i</sub></td>
+                            <td class="px-4 py-2">Factor de Ubicación (Multiplicador de Visita)</td>
+                            <td class="px-4 py-2">1.0 (Base)</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2 font-mono font-bold">217</td>
+                            <td class="px-4 py-2">Costo Promedio Mensual de Visitas ($50/sem)</td>
+                            <td class="px-4 py-2">$217 USD</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2 font-mono font-bold">a<sub>i</sub></td>
+                            <td class="px-4 py-2">Área del proyecto (m²)</td>
+                            <td class="px-4 py-2">Variable</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2 font-mono font-bold">N<sub>target</sub></td>
+                            <td class="px-4 py-2">Proyectos concurrentes meta (para asignación)</td>
+                            <td class="px-4 py-2">3 (Default)</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer / Operational Note -->
+    <footer class="text-center text-slate-500 text-xs pb-8">
+        <div class="bg-white inline-block px-6 py-3 rounded-full shadow-sm border border-slate-100 mb-4">
+            <span class="font-bold text-slate-700">Nota Operativa:</span> Las visitas se programan semanalmente (Viernes PM) para minimizar interferencia. Costo promedio mensual calculado sobre 52 semanas.
+        </div>
+        <p>&copy; 2026 PortalView v1.1</p>
+    </footer>
+
+</main>
+
+<!-- JavaScript Logic -->
+<script>
+    // --- Init Lenis (Smooth Scrolling) ---
+    const lenis = new Lenis();
+
+    function raf(time) {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+
+    // --- State Management ---
+    const state = {
+        currentView: 'sales',
+        params: {
+            salary: 42000,
+            msProject: 360,
+            hardware: 1000, // Amortized
+            autodesk: 3675, // Default AEC
+            cupixBlock: 6200,
+            cupixThreshold: 10000,
+            objectFee: 0.50,
+            visitWeeklyAvg: 217 // 50 * 52 / 12
+        },
+        portfolio: [
+            // Default Example Data
+            { id: 1, name: "Proyecto Alfa", area: 6000, objects: 200, duration: 12, loc: 1.0 },
+            { id: 2, name: "Proyecto Beta", area: 6000, objects: 300, duration: 12, loc: 1.0 },
+            { id: 3, name: "Proyecto Gamma", area: 6000, objects: 150, duration: 12, loc: 1.5 },
+            { id: 4, name: "Proyecto Delta", area: 6000, objects: 400, duration: 12, loc: 1.0 },
+            { id: 5, name: "Proyecto Epsilon", area: 6000, objects: 200, duration: 12, loc: 1.0 },
+        ]
+    };
+
+    // --- Chart Instances ---
+    let fixedCostChart = null;
+    let quoteBreakdownChart = null;
+    let arbitrageChart = null;
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        initCharts();
+        updateGlobalParams(); // Initial calc
+        calculateQuote(); // Initial quote
+        renderPortfolio(); // Initial portfolio
+    });
+
+    // --- Navigation Logic ---
+    function switchTab(view) {
+        state.currentView = view;
+
+        // Toggle Visibility
+        document.getElementById('view-sales').classList.toggle('hidden', view !== 'sales');
+        document.getElementById('view-ops').classList.toggle('hidden', view !== 'ops');
+        document.getElementById('view-docs').classList.toggle('hidden', view !== 'docs');
+
+        // Update Buttons
+        const btnSales = document.getElementById('btn-sales');
+        const btnOps = document.getElementById('btn-ops');
+        const btnDocs = document.getElementById('btn-docs');
+
+        // Reset classes
+        const activeClass = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-600 text-white shadow-sm";
+        const inactiveClass = "px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors ml-2";
+        const inactiveClassNoMargin = "px-4 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white transition-colors";
+
+        if(view === 'sales') {
+            btnSales.className = activeClass;
+            btnOps.className = inactiveClass;
+            btnDocs.className = inactiveClass;
+        } else if (view === 'ops') {
+            btnOps.className = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-emerald-600 text-white shadow-sm ml-2";
+            btnSales.className = inactiveClassNoMargin;
+            btnDocs.className = inactiveClass;
+        } else {
+            btnDocs.className = "px-4 py-2 rounded-md text-sm font-medium transition-colors bg-slate-600 text-white shadow-sm ml-2";
+            btnSales.className = inactiveClassNoMargin;
+            btnOps.className = inactiveClass;
+        }
+    }
+
+    // --- Core Logic: Parameters ---
+    function updateGlobalParams() {
+        const tier = parseInt(document.getElementById('autodesk-tier').value);
+        state.params.autodesk = tier;
+
+        const totalFixed = state.params.salary + state.params.msProject + state.params.hardware + tier;
+
+        // Update Text
+        document.getElementById('total-fixed-display').innerText = formatCurrency(totalFixed);
+
+        // Update Fixed Cost Chart
+        if(fixedCostChart) {
+            fixedCostChart.data.datasets[0].data = [
+                state.params.salary,
+                state.params.autodesk,
+                state.params.msProject + state.params.hardware
+            ];
+            fixedCostChart.update();
+        }
+
+        // Re-calc dependent views
+        calculateQuote();
+        updatePortfolioStats();
+    }
+
+    // --- Core Logic: Model A (Quote Calculator) ---
+    function calculateQuote() {
+        // Get Inputs
+        const area = parseFloat(document.getElementById('calc-area').value) || 0;
+        const objects = parseFloat(document.getElementById('calc-objects').value) || 0;
+        const duration = parseFloat(document.getElementById('calc-duration').value) || 12;
+        const location = parseFloat(document.getElementById('calc-location').value) || 1.0;
+        const targets = parseFloat(document.getElementById('calc-targets').value) || 1;
+
+        // UI Update
+        document.getElementById('duration-display').innerText = duration + " meses";
+
+        // 1. Visit Cost (Weekly Avg * Location * Duration)
+        const costVisits = state.params.visitWeeklyAvg * location * duration;
+
+        // 2. Object Cost (One time)
+        const costObjects = state.params.objectFee * objects;
+
+        // 3. License Cost (Segregated: Ceiling per project)
+        const licenseBlocks = Math.ceil(area / state.params.cupixThreshold);
+        const costLicense = licenseBlocks * state.params.cupixBlock;
+
+        // 4. Overhead Allocation (Duration share of Fixed Base / Targets)
+        const totalFixed = state.params.salary + state.params.msProject + state.params.hardware + state.params.autodesk;
+        const costOverhead = (duration / 12) * (totalFixed / targets);
+
+        // Total P_floor
+        const totalQuote = costVisits + costObjects + costLicense + costOverhead;
+        const monthlyQuote = totalQuote / duration;
+
+        // Update UI
+        document.getElementById('quote-total').innerText = formatCurrency(totalQuote);
+        document.getElementById('quote-monthly').innerText = formatCurrency(monthlyQuote) + "/mes";
+
+        // Update Chart
+        if(quoteBreakdownChart) {
+            quoteBreakdownChart.data.datasets[0].data = [costVisits, costObjects, costLicense, costOverhead];
+            quoteBreakdownChart.update();
+        }
+    }
+
+    // --- Core Logic: Model B (Portfolio Simulator) ---
+    function addProject() {
+        const name = document.getElementById('sim-name').value || "Nuevo Proyecto";
+        const area = parseFloat(document.getElementById('sim-area').value);
+        const loc = parseFloat(document.getElementById('sim-loc').value);
+
+        if(!area || isNaN(area)) return alert("Por favor ingrese un área válida");
+
+        const newProj = {
+            id: Date.now(),
+            name: name,
+            area: area,
+            objects: 300, // Default for sim simplicity
+            duration: 12, // Default
+            loc: loc
+        };
+
+        state.portfolio.push(newProj);
+        renderPortfolio();
+
+        // Clear inputs
+        document.getElementById('sim-name').value = "";
+        document.getElementById('sim-area').value = "";
+    }
+
+    function removeProject(id) {
+        state.portfolio = state.portfolio.filter(p => p.id !== id);
+        renderPortfolio();
+    }
+
+    function renderPortfolio() {
+        const list = document.getElementById('portfolio-list');
+        list.innerHTML = "";
+
+        document.getElementById('project-count').innerText = state.portfolio.length;
+
+        state.portfolio.forEach(p => {
+            const div = document.createElement('div');
+            div.className = "bg-white p-3 rounded border border-slate-200 shadow-sm flex justify-between items-center text-sm";
+            div.innerHTML = `
+                    <div>
+                        <div class="font-bold text-slate-700">${p.name}</div>
+                        <div class="text-xs text-slate-500">${p.area.toLocaleString()} m² | Loc: ${p.loc}</div>
+                    </div>
+                    <button onclick="removeProject(${p.id})" class="text-red-400 hover:text-red-600 font-bold px-2">×</button>
+                `;
+            list.appendChild(div);
+        });
+
+        updatePortfolioStats();
+    }
+
+    function updatePortfolioStats() {
+        // Calculate Total Revenue (Model A Sum)
+        let totalRevenueModelA = 0;
+        let totalArea = 0;
+        let totalDirectCosts = 0; // Visits + Objects
+
+        state.portfolio.forEach(p => {
+            // Model A for this project
+            const p_license = Math.ceil(p.area / state.params.cupixThreshold) * state.params.cupixBlock;
+            // Full revenue based on Model A formula for each
+            const visits = state.params.visitWeeklyAvg * p.loc * p.duration;
+            const objects = state.params.objectFee * p.objects;
+            const licenseA = Math.ceil(p.area / state.params.cupixThreshold) * state.params.cupixBlock;
+
+            totalRevenueModelA += (licenseA + visits + objects);
+
+            totalArea += p.area;
+            totalDirectCosts += (visits + objects);
+        });
+
+        // Calculate Total Cost (Model B Aggregated)
+        const aggregatedBlocks = Math.ceil(totalArea / state.params.cupixThreshold);
+        const totalLicenseCostModelB = aggregatedBlocks * state.params.cupixBlock;
+
+        const totalCostModelB = totalLicenseCostModelB + totalDirectCosts;
+
+        // Arbitrage
+        const arbitrage = totalRevenueModelA - totalCostModelB;
+
+        // Display
+        document.getElementById('kpi-revenue').innerText = formatCurrency(totalRevenueModelA);
+        document.getElementById('kpi-cost').innerText = formatCurrency(totalCostModelB);
+        document.getElementById('kpi-arbitrage').innerText = formatCurrency(arbitrage);
+
+        // Update Chart
+        if(arbitrageChart) {
+            arbitrageChart.data.datasets = [
+                {
+                    label: 'Facturación Total (Model A)',
+                    data: [totalRevenueModelA],
+                    backgroundColor: '#4f46e5', // Indigo
+                    borderRadius: 4
+                },
+                {
+                    label: 'Costo Real (Model B)',
+                    data: [totalCostModelB],
+                    backgroundColor: '#64748b', // Slate
+                    borderRadius: 4
+                },
+                {
+                    label: 'Margen Arbitraje',
+                    data: [arbitrage], // Visual hack: show as 3rd bar
+                    backgroundColor: '#10b981', // Emerald
+                    borderRadius: 4
+                }
+            ];
+            arbitrageChart.update();
+        }
+    }
+
+    // --- Helpers ---
+    function formatCurrency(val) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
+    }
+
+    // --- Chart Config ---
+    function initCharts() {
+        // Chart 1: Fixed Costs
+        const ctx1 = document.getElementById('fixedCostChart').getContext('2d');
+        fixedCostChart = new Chart(ctx1, {
+            type: 'doughnut',
+            data: {
+                labels: ['Salarios ($42k)', 'Autodesk (Var)', 'Otros (HW/SW)'],
+                datasets: [{
+                    data: [42000, 3675, 1360],
+                    backgroundColor: ['#4f46e5', '#3b82f6', '#94a3b8'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                }
+            }
+        });
+
+        // Chart 2: Quote Breakdown
+        const ctx2 = document.getElementById('quoteBreakdownChart').getContext('2d');
+        quoteBreakdownChart = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: ['Visitas (Semanal)', 'Objetos', 'Licencia (Cupix)', 'Overhead (Fijo)'],
+                datasets: [{
+                    label: 'Costo ($)',
+                    data: [0,0,0,0],
+                    backgroundColor: ['#f59e0b', '#ef4444', '#3b82f6', '#64748b'],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrency(context.raw);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { callback: (val) => '$' + val/1000 + 'k' } }
+                }
+            }
+        });
+
+        // Chart 3: Arbitrage
+        const ctx3 = document.getElementById('arbitrageChart').getContext('2d');
+        arbitrageChart = new Chart(ctx3, {
+            type: 'bar',
+            data: {
+                labels: ['Análisis Financiero del Portafolio'],
+                datasets: [] // Populated in updatePortfolioStats
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + formatCurrency(context.raw);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
